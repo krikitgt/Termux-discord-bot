@@ -1,0 +1,12 @@
+{
+  "discord_token": "YOUR_DISCORD_BOT_TOKEN_HERE",
+  "ai_model": "ollama",
+  "model_name": "llama2",
+  "ai_api_url": "http://localhost:11434",
+  "prefix": "!",
+  "description": "AI-powered Discord bot running on Termux",
+  "respond_to_mentions": true,
+  "respond_to_all_messages": false,
+  "temperature": 0.7,
+  "max_tokens": 500
+}
