@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Termux Discord AI Bot
+Termux Discord AI Bot - Simplified Version
 A Discord bot powered by AI running on Termux
 """
 
@@ -45,6 +45,8 @@ class AIModel:
         try:
             if self.model_type == 'ollama':
                 return await self._ollama_response(prompt)
+            elif self.model_type == 'openai':
+                return await self._openai_response(prompt)
             else:
                 return "❌ Unknown AI model type"
         except Exception as e:
@@ -74,6 +76,35 @@ class AIModel:
             return "❌ AI response timeout. Try a simpler question."
         except Exception as e:
             return f"❌ Connection error: {str(e)}"
+    
+    async def _openai_response(self, prompt: str) -> str:
+        """Get response from OpenAI API"""
+        try:
+            api_key = CONFIG.get('openai_api_key')
+            if not api_key:
+                return "❌ OpenAI API key not configured"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    json={
+                        "model": self.model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": CONFIG.get('temperature', 0.7),
+                        "max_tokens": CONFIG.get('max_tokens', 500),
+                    },
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data['choices'][0]['message']['content']
+                    else:
+                        return f"❌ OpenAI error: {resp.status}"
+        except asyncio.TimeoutError:
+            return "❌ API timeout. Try again."
+        except Exception as e:
+            return f"❌ Error: {str(e)}"
 
 # Initialize AI model
 ai_model = AIModel(CONFIG)
@@ -135,28 +166,37 @@ async def ask(ctx, *, question: str = None):
 @bot.command(name='status')
 async def status(ctx):
     """Show AI model status"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{ai_model.api_url}/api/tags") as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    models = [m['name'] for m in data.get('models', [])]
-                    embed = discord.Embed(
-                        title="🤖 AI Model Status",
-                        description=f"✅ Connected to {ai_model.model_type}",
-                        color=discord.Color.green()
-                    )
-                    embed.add_field(name="Current Model", value=ai_model.model_name)
-                    embed.add_field(name="Available Models", value="\n".join(models) or "None")
-                    await ctx.send(embed=embed)
-                else:
-                    await ctx.send(f"❌ Error: {resp.status}")
-    except Exception as e:
+    if ai_model.model_type == 'ollama':
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{ai_model.api_url}/api/tags") as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        models = [m['name'] for m in data.get('models', [])]
+                        embed = discord.Embed(
+                            title="🤖 AI Model Status",
+                            description=f"✅ Connected to Ollama",
+                            color=discord.Color.green()
+                        )
+                        embed.add_field(name="Current Model", value=ai_model.model_name)
+                        embed.add_field(name="Available Models", value="\n".join(models) if models else "None")
+                        await ctx.send(embed=embed)
+                    else:
+                        await ctx.send(f"❌ Error: {resp.status}")
+        except Exception as e:
+            embed = discord.Embed(
+                title="❌ Connection Error",
+                description=f"Cannot connect to {ai_model.api_url}\n\n{str(e)}",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+    else:
         embed = discord.Embed(
-            title="❌ Connection Error",
-            description=f"Cannot connect to {ai_model.api_url}\n\n{str(e)}",
-            color=discord.Color.red()
+            title="🤖 AI Model Status",
+            description=f"Using {ai_model.model_type}",
+            color=discord.Color.blue()
         )
+        embed.add_field(name="Current Model", value=ai_model.model_name)
         await ctx.send(embed=embed)
 
 @bot.event
